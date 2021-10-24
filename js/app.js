@@ -62,7 +62,7 @@ var global = {
     toggleMassState: 0,
     backgroundColor: '#f2fbff',
     lineColor: '#000000',
-    server: "arras-original-server-template.glitch.me"
+    server: "lurraxster-source.glitch.me"
 };
 
 var util = (function(exports = {}) {
