@@ -62,7 +62,7 @@ var global = {
     toggleMassState: 0,
     backgroundColor: '#f2fbff',
     lineColor: '#000000',
-    server: "lurraxster-source.glitch.me"
+    server: "arras-tx-io.glitch.me"
 };
 
 var util = (function(exports = {}) {
@@ -140,7 +140,7 @@ var util = (function(exports = {}) {
     };
     exports.pullJSON = filename => {
         let request = new XMLHttpRequest();
-        let url = window.location.protocol + "//" + global.server + "/" + filename + ".json";
+        let url = window.location.protocol + "//" + global.server + "/mockups.json";
         // Set up the request
         console.log("Loading JSON from " + url);
         request.responseType = 'json';
