@@ -62,6 +62,11 @@ var global = {
     toggleMassState: 0,
     backgroundColor: '#f2fbff',
     lineColor: '#000000',
+  // ===============================
+    // Chat system.
+    // ===============================
+    isChatMode: false,
+    // ===============================
     server: "arras-tx-io.glitch.me"
 };
 
@@ -161,7 +166,25 @@ var util = (function(exports = {}) {
     };
     return exports
 })();
+// ======================================================================
+// Chat System.
+// ======================================================================
+const modifyOverlyLongName = (name, fontSize, maxLength) =>{
+    let nameLength = measureText(name, fontSize);
 
+    // Need to check the length of name in pixels, otherwise,
+    // Arabic names tend to mess up the display.
+    // Examples:
+    // ﷽﷽﷽﷽﷽﷽﷽﷽﷽
+    // ﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽
+    if (nameLength >= maxLength){
+        return 'a spoopy 👻';
+    }
+    else {
+        return name;
+    }
+}; 
+// ======================================================================
 // Get color
 var config = {
     graphical: {
@@ -744,6 +767,11 @@ var entities = [],
     minimap = [],
     upgradeSpin = 0,
     messages = [],
+     // ============================================================
+    // Chat System.
+    // ============================================================
+    chatMessages = [],
+    // ============================================================
     messageFade = 0,
     newMessage = 0,
     metrics = {
@@ -1041,6 +1069,13 @@ var getRatio = () => {
 
 global.target = target;
 global.player = player;
+// ============================================================
+// Chat system.
+// ============================================================
+global.playersList = [];
+global.playersListIndex = 0;
+global.selectedPlayerId = 0;
+// ============================================================
 global.canUpgrade = false;
 global.canSkill = false;
 global.message = '';
@@ -1119,6 +1154,162 @@ class Canvas {
                 if (global.died) this.parent.socket.talk('s', global.playerName, 0);
                 global.died = false;
                 break; // Enter to respawn
+              // ======================================================================
+        // Chat system.
+        // ======================================================================
+        // H
+        case 72:
+            if (!global.died) {
+                if (global.isChatMode === false) {
+                    // Chat input textbox.
+                    let chatInput = document.createElement('input');
+                    chatInput.id = 'chatInput';
+                    chatInput.tabindex = 4;
+                    chatInput.style.font = 'bold 18px Ubuntu';
+                    chatInput.maxlength = '200';
+                    chatInput.placeholder = 'Enter to send.Esc to cancel.Введите,чтобы отправить.Esc,чтобы отменить.';
+
+                    // =============================================
+                    // Players list drop down list.
+                    // =============================================
+                    let playersDropDownList = document.createElement("select");
+                    playersDropDownList.id = "playersList";
+                    playersDropDownList.className = 'players-list';
+
+                    // Add default option.
+                    let allOption = document.createElement("option");
+                    allOption.value = '0';
+                    allOption.text = '-- All --';
+                    playersDropDownList.appendChild(allOption);
+
+                    try {
+                        const players = global.playersList;
+
+                        //Create and append the options
+                        for (var i = 0; i < players.length; i+=2) {
+                            var option = document.createElement("option");
+                            option.value = players[i];
+                            option.text = players[i+1];
+                            playersDropDownList.appendChild(option);
+                        }
+
+                        // Try to set the value to previously selected player id.
+                        playersDropDownList.value = global.selectedPlayerId;
+
+                        // Player does not exist anymore?
+                        if (playersDropDownList.value != global.selectedPlayerId){
+                            // Change to default index.
+                            playersDropDownList.selectedIndex = 0;
+                        }
+                    }
+                    catch (error){
+                        console.log(error);
+                    }
+
+                    // =============================================
+                    // Chat input wrapper div.
+                    let chatInputWrapper = document.createElement('div');
+                    chatInputWrapper.style.position = 'absolute';
+                    chatInputWrapper.style.width = '720px';
+
+                    chatInputWrapper.style.left = '50%';
+                    chatInputWrapper.style.bottom = '100px';
+                    chatInputWrapper.style.transform = 'translate(-50%, -50%)';
+                    chatInputWrapper.style.margin = '0 auto';
+                    chatInputWrapper.style.visibility = 'hidden';
+
+                    chatInputWrapper.appendChild(playersDropDownList);
+                    chatInputWrapper.appendChild(chatInput);
+                    document.body.appendChild(chatInputWrapper);
+
+                    // Sending chat.
+                    chatInput.addEventListener('keydown', function(event) {
+                        if (event.key === 'Enter' || event.keyCode === 13) {
+                            // ========================================================================
+                            // Check again if the player died, otherwise, it hangs the client.
+                            // There will be an error saying that "color is undefined" in app.js file.
+                            // ========================================================================
+                            // Death chat experiment.
+                            if (global.died) {
+                                global.socket.talk('s', global.playerName, 0);
+                                global.died = false;
+                            }
+                            else {
+                                let chatMessage = chatInput.value;
+
+                                if (chatMessage) {
+                                    let maxLen = 100;
+                                    let trimmedMessage = chatMessage.length > maxLen ? chatMessage.substring(0, maxLen - 3) + "..." : chatMessage.substring(0, maxLen);
+
+                                    const ddl = playersDropDownList;
+                                    if (ddl){
+                                        global.playersListIndex = ddl.selectedIndex;
+                                        global.selectedPlayerId = ddl.options[ddl.selectedIndex].value;
+                                    }
+
+                                    global.socket.talk('h', trimmedMessage, global.selectedPlayerId);
+
+                                    chatInputWrapper.removeChild(playersDropDownList);
+                                    chatInputWrapper.removeChild(chatInput);
+                                    document.body.removeChild(chatInputWrapper);
+
+                                    let gameCanvas = document.getElementById('gameCanvas');
+                                    gameCanvas.focus();
+
+                                    global.isChatMode = false;
+                                }
+                            }
+                        }
+                    });
+
+                    // Cancelling chat - pressing ESC in players dropdown list.
+                    playersDropDownList.addEventListener('keydown', function(event) {
+                        if (event.key === 'Esc' || event.keyCode === 27) {
+                            chatInputWrapper.removeChild(playersDropDownList);
+                            chatInputWrapper.removeChild(chatInput);
+                            document.body.removeChild(chatInputWrapper);
+
+                            const gameCanvas = document.getElementById('gameCanvas');
+                            gameCanvas.focus();
+                            global.isChatMode = false;
+                        }
+                    });
+
+                    // Cancelling chat.
+                    chatInput.addEventListener('keydown', function(event) {
+                        if (event.key === 'Esc' || event.keyCode === 27) {
+                            chatInputWrapper.removeChild(playersDropDownList);
+                            chatInputWrapper.removeChild(chatInput);
+                            document.body.removeChild(chatInputWrapper);
+
+                            const gameCanvas = document.getElementById('gameCanvas');
+                            gameCanvas.focus();
+                            global.isChatMode = false;
+                        }
+                    });
+
+                    global.isChatMode = true;
+
+                    // To remove initial "i" letter.
+                    setTimeout(() => {
+                        chatInput.value = '';
+                        chatInputWrapper.style.visibility = 'visible';
+                        chatInput.focus();
+                    }, 10);
+                }
+                else {   // Already in chat mode, focus the chat input textbox.
+                    let existingChatInput = document.getElementById('chatInput');
+                    if (existingChatInput) {
+                        // Remove 'h' from the input.
+                        let oldValue = existingChatInput.value;
+                        existingChatInput.value = '';
+                        existingChatInput.focus();
+                        existingChatInput.value = oldValue;
+                    }
+                }
+            }
+            break;
+        // ===========================================
             case global.KEY_UP_ARROW:
             case global.KEY_UP:
                 this.parent.socket.cmd.set(0, true);
@@ -1803,6 +1994,11 @@ const socketInit = (() => {
                             z.twiggle = get.next();
                             z.layer = get.next();
                             z.color = get.next();
+                          // =============================================
+                            // Chat System.
+                            // =============================================
+                            z.roleColorIndex = get.next();
+                            // =============================================
                             // Update health, flagging as injured if needed
                             if (isNew) {
                                 z.health = get.next() / 255;
@@ -2156,6 +2352,40 @@ const socketInit = (() => {
                     }
                 }
                 break;
+                    // =============================================================
+            // Chat System.
+            // =============================================================
+            // Receive player id.
+            case 'I':
+            {
+                if (global.player) {
+                    console.log('Player id received: ' + m[0]);
+                    player.id = m[0];
+                    global.player.id = m[0];
+                }
+            } break;
+
+            // Receive player name.
+            case 'N': {
+                if (global.player) {
+                    console.log('Player name received: ' + m[0]);
+                    global.playerName = player.name = m[0];
+                }
+            } break;
+
+            // Receive players list.
+            case 'L': {
+                // ==================================================
+                // The array contains alternate id and name.
+                // For example:
+                // m[0] => Player Id
+                // m[1] => Player Name
+                // m[2] => Player Id
+                // m[3] => Player Name
+                // ==================================================
+                global.playersList = m;
+            } break;
+            // =============================================================
             case 'R': { // room setup
                 global.gameWidth = m[0];
                 global.gameHeight = m[1];
@@ -2228,6 +2458,32 @@ const socketInit = (() => {
                 });
             }
             break;
+                // =============================================================================
+            // Chat System.
+            // =============================================================================
+            case 'm':
+            { // message
+                messages.push({
+                    text: m[0],
+                    status: 2,
+                    alpha: 0,
+                    time: Date.now(),
+                    colorIndex: m[1],
+                });
+            } break;
+
+            case 'h':
+            { // Chat message
+                chatMessages.push({
+                    status: 2,
+                    alpha: 0,
+                    time: Date.now(),
+                    playerName: m[0],
+                    text: m[1],
+                    colorIndex: m[2],
+                });
+            } break;
+            // =============================================================================
             case 'u': { // uplink
                 // Pull the camera info
                 let camtime = m[0],
@@ -2793,10 +3049,34 @@ function drawHealth(x, y, instance, ratio) {
     if (instance.nameplate && instance.id !== gui.playerid) {
         if (instance.render.textobjs == null) instance.render.textobjs = [TextObj(), TextObj()];
         if (instance.name !== '\u0000') {
+           var name = instance.name.substring(7, instance.name.length + 1);
+        var namecolor = instance.name.substring(0, 7);
+        // ================================================================================
+            // Chat System.
+            // ================================================================================
+            let nameColor = color.guiwhite;
+            let colorIndex = instance.roleColorIndex;
+
+            if (colorIndex){
+                nameColor = getColor(colorIndex);
+            }
+
+            let playerNameFontSize = 16;
+            let playerName = modifyOverlyLongName(instance.name, playerNameFontSize, 600);
+
+            // Draw other players' names.
+            instance.render.textobjs[0].draw(
+                playerName,
+                x, y - realSize - 30,
+                playerNameFontSize, nameColor, 'center'
+            );
+            // ================================================================================
+        /*
             instance.render.textobjs[0].draw(
                 instance.name,
                 x, y - realSize - 30, 16, color.guiwhite, 'center'
             );
+            */
             instance.render.textobjs[1].draw(
                 util.handleLargeNumber(instance.score, true),
                 x, y - realSize - 16, 8, color.guiwhite, 'center'
@@ -3148,7 +3428,13 @@ const gameDraw = (() => {
                 drawBar(x - msg.len / 2, x + msg.len / 2, y + height / 2, height, color.black);
                 // Draw the text
                 ctx.globalAlpha = Math.min(1, msg.alpha);
-                msg.textobj.draw(text, x, y + height / 2, height - 4, color.guiwhite, 'center', true);
+              //  msg.textobj.draw(text, x, y + height / 2, height - 4, color.guiwhite, 'center', true);
+              // ==================================================================================
+                // Chat System.
+                // ==================================================================================
+                let chatColor = getColor(msg.colorIndex);
+                msg.textobj.draw(text, x, y + height/2, height-4, chatColor, 'center', true);
+                // ==================================================================================
                 // Iterate and move
                 y += (vspacing + height);
                 if (msg.status > 1) {
@@ -3169,7 +3455,74 @@ const gameDraw = (() => {
             }
             ctx.globalAlpha = 1;
         }
+// ==============================================================================
+        // Chat System.
+        // ==============================================================================
+        { // Draw chat messages
+            let vspacing = 4;
+            let height = 22;
+            let x = 50;
+            let y = (global.screenHeight / 3) + spacing;
 
+            ctx.save();
+            ctx.lineCap = 'miter';
+            ctx.lineJoin = 'miter';
+
+            // Draw each message
+            for (let i = chatMessages.length - 1; i >= 0; i--) {
+                let chatMessageObj = chatMessages[i];
+                let playerName = chatMessageObj.playerName;
+                let message = chatMessageObj.text;
+
+                let tmpPlayerName = playerName;
+                let tmpMessage = message;
+
+                // Give it a textobj if it doesn't have one
+                if (chatMessageObj.textobj == null) {
+                    chatMessageObj.textobj = TextObj();
+                }
+
+                if (chatMessageObj.playerNameDrawWidth == null) {
+                    chatMessageObj.playerNameDrawWidth = measureText(tmpPlayerName, height - 4);
+                }
+
+                if (chatMessageObj.messageDrawWidth == null) {
+                    chatMessageObj.messageDrawWidth = measureText(tmpMessage, height - 4);
+                }
+
+                const totalDrawWidth = chatMessageObj.playerNameDrawWidth + chatMessageObj.messageDrawWidth;
+
+                if (totalDrawWidth < 1000) {
+                    // Player name.
+                    const playerNameX1 = x - 4;
+                    const playerNameX2 = x + chatMessageObj.playerNameDrawWidth + 4;
+
+                    // Chat message.
+                    const chatX1 = playerNameX2;// + 10;
+                    const chatX2 = chatX1 + chatMessageObj.messageDrawWidth + 12;
+                    ctx.globalAlpha = 1.0;
+                    drawBar(chatX1, chatX2, y + height / 2, height, color.black);
+
+                    const messageColor = getColor(chatMessageObj.colorIndex);
+                    chatMessageObj.textobj.draw(tmpMessage, chatX1 + 2, y + (height / 2) + 1, height - 4, messageColor, 'left', true);
+
+                    // Draw player name and background on top of the message.
+                    ctx.globalAlpha = 0.6;
+                    drawBar(playerNameX1, playerNameX2, y + height / 2, height, color.black);
+
+                    const playerNameColor = getColor(chatMessageObj.colorIndex);
+                    ctx.globalAlpha = 0.8;
+                    chatMessageObj.textobj.draw(tmpPlayerName, playerNameX1, y + (height / 2) + 1, height - 4, playerNameColor, 'left', true);
+
+                    // Iterate and move
+                    y += (vspacing + height);
+                }
+            }
+            ctx.restore();
+
+            ctx.globalAlpha = 1;
+        }
+        // ==============================================================================
         { // Draw skill bars
             global.canSkill = !!gui.points;
             statMenu.set(0 + (global.canSkill || global.died || global.statHover));
@@ -3400,6 +3753,12 @@ const gameDraw = (() => {
                 drawBar(x, x + len, y + height / 2, height - 3, color.grey);
                 let shift = Math.min(1, entry.score / max);
                 drawBar(x, x + len * shift, y + height / 2, height - 3.5, entry.barcolor);
+               // ==============================================================
+                // Chat System.
+                // ==============================================================
+                let leaderboardNameFontSize = height - 5;
+                let leaderboardName = modifyOverlyLongName(entry.label, leaderboardNameFontSize, 200);
+                // ==============================================================
                 // Leadboard name + score 
                 text.leaderboard[i++].draw(
                     entry.label + ': ' + util.handleLargeNumber(Math.round(entry.score)),
@@ -3624,7 +3983,37 @@ const gameDrawDisconnected = (() => {
         text.message.draw(global.message, global.screenWidth / 2, global.screenHeight / 2 + 30, 15, color.orange, 'center');
     };
 })();
+// ===============================================================
+// Chat System.
+// ===============================================================
+setInterval(cleanUpChatMessages, 9000);
 
+function cleanUpChatMessages(){
+    try {
+        if (chatMessages){
+            if (chatMessages.length >= 8){
+                while (chatMessages.length >= 8){
+                    chatMessages[0].textobj.remove();
+                    chatMessages.splice(0, 1);
+                }
+            }
+            else {
+                if (chatMessages.length > 0){
+                    // Display chat for at most 8 seconds.
+                    if (Date.now() - chatMessages[0].time >= 8000){
+                        chatMessages[0].textobj.remove();
+                        chatMessages.splice(0, 1);
+                    }
+                }
+            }
+        }
+    }
+    catch (error){
+        console.log('[cleanUpChatMessages()]');
+        console.log(error);
+    }
+}
+// ===============================================================
 // The main function
 function animloop() {
     global.animLoopHandle = window.requestAnimFrame(animloop);
