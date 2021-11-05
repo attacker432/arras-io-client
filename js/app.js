@@ -145,7 +145,7 @@ var util = (function(exports = {}) {
     };
     exports.pullJSON = filename => {
         let request = new XMLHttpRequest();
-        let url = window.location.protocol + "//" + global.server + "client/json/mockups.json";
+        let url = window.location.protocol + "//" + global.server + "src/mockups.json";
         // Set up the request
         console.log("Loading JSON from " + url);
         request.responseType = 'json';
